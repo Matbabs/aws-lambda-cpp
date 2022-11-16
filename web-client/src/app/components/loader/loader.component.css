@@ -1,0 +1,24 @@
+.loader-container {
+    width: 350px;
+    border-radius: 10px;
+    text-align: center;
+    background: var(--background);
+    overflow: hidden;
+    color: var(--secondary-dark);
+}
+
+.loader-container > .status {
+    margin: 0px;
+    position: absolute;
+    background: var(--secondary);
+    height: 100%;
+    transition: all 250ms;
+}
+
+
+.loader-container > p {
+    display: flex;
+    justify-content: space-between;
+    padding-left: 10px;
+    padding-right: 10px;
+}

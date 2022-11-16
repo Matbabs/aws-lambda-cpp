@@ -1,0 +1,16 @@
+{
+    "files": [
+        {
+            "input": "input_1.txt",
+            "output": "input_1_processed.txt"
+        },
+        {
+            "input": "input_2.txt",
+            "output": "input_2_processed.txt"
+        },
+        {
+            "input": "input_3.txt",
+            "output": "input_3_processed.txt"
+        }
+    ]
+}

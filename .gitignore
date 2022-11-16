@@ -1,0 +1,5 @@
+/**/build
+/**/CMakeLists.txt
+/**/.vscode
+/**/input_*.txt
+/**/node_modules

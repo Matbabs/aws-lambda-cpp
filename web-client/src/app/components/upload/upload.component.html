@@ -1,0 +1,23 @@
+<div class="container">
+    <div>
+        <img src="../../assets/lambda.png" height="80">
+        <img src="../../assets/cpp.png" height="80">
+    </div>
+    <h1>AWS Lambda - C++</h1>
+    <div  class="upload-container" (click)="clickToAddFile()">
+        <img *ngIf="isLoading" src="../../assets/loader.gif" height="150px">
+        <img *ngIf="!isLoading" id="cloud" src="../../assets/file.png" height="150px">
+        <input *ngIf="!isLoading" id="file-input" type="file" accept=".txt" (change)="handleUploadFiles($event)" multiple="multiple">
+        <p>Upload Files (.txt)</p>
+    </div>
+    <app-loader *ngIf="fileList && isLoading" 
+        [text]="'Files uploaded'" [numbers]="uploadedFiles.value.length" [numbersTotal]="fileList.length"></app-loader>
+    <app-loader *ngIf="fileList && isLoading"
+        [text]="'Lambda C++ is processing'" [numbers]="uploadedFiles.value.length === fileList.length ? ( downloadFiles.value.length > 0 ? 2 : 1 ) : 0" [numbersTotal]="2"></app-loader>
+    <app-loader *ngIf="fileList && isLoading"
+        [text]="'Files downloaded'" [numbers]="downloadFiles.value.length" [numbersTotal]="fileList.length"></app-loader>
+    <div *ngIf="presignedUrlsDownload.length > 0 && !isLoading" class="alert-container">
+        <p>Files processed correctly</p>
+        <button class="alert-download" (click)="handleDownloadZip()">Download here if not started</button>
+    </div>
+</div>

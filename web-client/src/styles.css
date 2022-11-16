@@ -1,0 +1,24 @@
+@import url('https://fonts.googleapis.com/css2?family=Lexend+Deca&display=swap');
+
+*, ::before, ::after {
+    box-sizing: border-box;
+    user-select: none;
+    position: relative;
+    font-family: 'Lexend Deca', sans-serif;
+}
+
+:root {
+    --primary: #ff9735;
+    --secondary: #659ad2;
+    --secondary-dark: #004482;
+    --success: #d7ffc0;
+    --background: #f1f1f1;
+    --text: #3e4257;
+}
+
+body, html {
+    margin: 0;
+    padding: 0;
+    scroll-behavior: smooth;  
+    color: var(--text);
+}

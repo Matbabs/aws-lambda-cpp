@@ -1,0 +1,358 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  cpp lambda cloudformation stack
+
+Transform:
+- AWS::Serverless-2016-10-31
+
+Parameters:
+
+  LambdaName:
+    Type: String
+
+Resources:
+
+  LambdaCppBucket:
+    Type: AWS::S3::Bucket
+    Description: Bucket to store files
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Sub "${AWS::AccountId}-${LambdaName}-files"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - HEAD
+              - GET
+              - POST
+              - PUT
+              - DELETE
+            AllowedOrigins:
+              - '*'
+            Id: corsRule
+            MaxAge: 3600
+
+  LambdasApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: v1
+      EndpointConfiguration: REGIONAL
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${LambdaName}-role"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: !Sub "${LambdaName}-policy"
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - s3:*
+              - lambda:*
+              - apigateway:*
+              - logs:*
+              Resource: "*"
+
+  getPresignedUrl:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${LambdaName}-getPresignedUrl"
+      Handler: index.handler
+      Runtime: nodejs14.x
+      InlineCode: |
+        'use strict';
+        const AWS = require('aws-sdk');
+        AWS.config.update({region: process.env.AWS_REGION});
+        const s3client = new AWS.S3({apiVersion: '2006-03-01'});
+        exports.handler = async function (event) {
+          const conditions = [
+            { bucket: process.env.BUCKET_NAME },
+            { key: event.queryStringParameters.key}
+          ]
+          const params = {
+            Bucket: process.env.BUCKET_NAME,
+            Conditions: conditions,
+            Expires: 60 * 5
+          }
+          const response = await s3client.createPresignedPost(params);
+          response.event = event;
+          return {
+            statusCode: 200,
+            headers: {
+              "Access-Control-Allow-Origin": "*"
+            },
+            body: JSON.stringify(response)
+          }
+        }
+      Role: !GetAtt LambdaRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Sub "${AWS::AccountId}-${LambdaName}-files"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /presigned-url
+            Method: get
+            RestApiId:
+              Ref: LambdasApiGateway
+
+  benchMarkNodeJS:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${LambdaName}-benchmark-NodeJS"
+      Handler: index.handler
+      Runtime: nodejs14.x
+      Timeout: 900
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        AWS.config.update({region: process.env.AWS_REGION});
+        const s3client = new AWS.S3({apiVersion: '2006-03-01'});
+        exports.handler = function (event, context, callback) {
+          const body = JSON.parse(event.body);
+          const files = body.files;
+          const presignedUrls = new Array(files.length);
+          let files_processed = 0;
+          for(const [i, file] of files.entries()) {
+            getS3Object(file).then((content) => {
+              content = processContent(content);
+              putS3Object(file, content).then(() => {
+                  presignedUrls[i] = s3client.getSignedUrl('getObject', {
+                    Bucket: process.env.BUCKET_NAME,
+                    Key: file.output,
+                    Expires: 60 * 5
+                  });
+                  files_processed++;
+                  if(files_processed === files.length) {
+                    callback(null, {
+                      statusCode: 200,
+                      headers: {
+                        "Access-Control-Allow-Origin": "*"
+                      },
+                      body: JSON.stringify({presignedUrls})
+                    });
+                  }
+              });
+            });
+          }
+        };
+        function getS3Object(file){
+          const params = {
+            Bucket: process.env.BUCKET_NAME,
+            Key: file.input
+          };
+          return s3client.getObject(params).promise().then(data => data.Body.toString());
+        }
+        function putS3Object(file, content){
+          const params = {
+            Bucket: process.env.BUCKET_NAME,
+            Key: file.output,
+            Body: content
+          };
+          return s3client.putObject(params).promise();
+        }
+        function processContent(content) {
+          return content.split(' ').join('\n');
+        }
+      Role: !GetAtt LambdaRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Sub "${AWS::AccountId}-${LambdaName}-files"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /process-node
+            Method: post
+            RestApiId:
+              Ref: LambdasApiGateway
+
+  LambdasCloudwatchDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${LambdaName}-dashboard"
+      DashboardBody: !Sub '{
+        "widgets": [
+            {
+                "height": 3,
+                "width": 24,
+                "y": 0,
+                "x": 0,
+                "type": "metric",
+                "properties": {
+                    "view": "singleValue",
+                    "metrics": [
+                        [ "AWS/Lambda", "Duration", "FunctionName", "${LambdaName}" ],
+                        [ ".", "Invocations", ".", "." ],
+                        [ ".", "Errors", ".", "." ],
+                        [ "...", "${LambdaName}-getPresignedUrl" ],
+                        [ ".", "Duration", ".", "." ],
+                        [ ".", "Invocations", ".", "." ]
+                    ],
+                    "region": "eu-west-1",
+                    "yAxis": {
+                        "left": {
+                            "min": 0,
+                            "max": 100000
+                        }
+                    },
+                    "setPeriodToTimeRange": false,
+                    "sparkline": true,
+                    "liveData": false,
+                    "legend": {
+                        "position": "bottom"
+                    },
+                    "period": 300
+                }
+            },
+            {
+                "height": 9,
+                "width": 24,
+                "y": 3,
+                "x": 0,
+                "type": "explorer",
+                "properties": {
+                    "metrics": [
+                        {
+                            "metricName": "Duration",
+                            "resourceType": "AWS::Lambda::Function",
+                            "stat": "Average"
+                        },
+                        {
+                            "metricName": "Errors",
+                            "resourceType": "AWS::Lambda::Function",
+                            "stat": "Sum"
+                        },
+                        {
+                            "metricName": "Invocations",
+                            "resourceType": "AWS::Lambda::Function",
+                            "stat": "Sum"
+                        }
+                    ],
+                    "aggregateBy": {
+                        "key": "",
+                        "func": ""
+                    },
+                    "labels": [
+                        {
+                            "key": "FunctionName",
+                            "value": "${LambdaName}"
+                        },
+                        {
+                            "key": "FunctionName",
+                            "value": "${LambdaName}-getPresignedUrl"
+                        }
+                    ],
+                    "widgetOptions": {
+                        "legend": {
+                            "position": "bottom"
+                        },
+                        "view": "timeSeries",
+                        "stacked": true,
+                        "rowsPerPage": 1,
+                        "widgetsPerRow": 3
+                    },
+                    "period": 300,
+                    "splitBy": "",
+                    "region": "eu-west-1"
+                }
+            },
+            {
+                "height": 13,
+                "width": 24,
+                "y": 12,
+                "x": 0,
+                "type": "explorer",
+                "properties": {
+                    "metrics": [
+                        {
+                            "metricName": "Count",
+                            "resourceType": "AWS::ApiGateway::RestApi",
+                            "stat": "Sum"
+                        },
+                        {
+                            "metricName": "5XXError",
+                            "resourceType": "AWS::ApiGateway::RestApi",
+                            "stat": "Sum"
+                        },
+                        {
+                            "metricName": "4XXError",
+                            "resourceType": "AWS::ApiGateway::RestApi",
+                            "stat": "Sum"
+                        },
+                        {
+                            "metricName": "Latency",
+                            "resourceType": "AWS::ApiGateway::RestApi",
+                            "stat": "Average"
+                        },
+                        {
+                            "metricName": "IntegrationLatency",
+                            "resourceType": "AWS::ApiGateway::RestApi",
+                            "stat": "Average"
+                        },
+                        {
+                            "metricName": "CacheHitCount",
+                            "resourceType": "AWS::ApiGateway::RestApi",
+                            "stat": "Sum"
+                        },
+                        {
+                            "metricName": "CacheMissCount",
+                            "resourceType": "AWS::ApiGateway::RestApi",
+                            "stat": "Sum"
+                        }
+                    ],
+                    "labels": [
+                        {
+                            "key": "ApiName",
+                            "value": "${LambdaName}-stack"
+                        }
+                    ],
+                    "widgetOptions": {
+                        "legend": {
+                            "position": "bottom"
+                        },
+                        "view": "timeSeries",
+                        "stacked": true,
+                        "rowsPerPage": 4,
+                        "widgetsPerRow": 4
+                    },
+                    "period": 300,
+                    "splitBy": "",
+                    "region": "eu-west-1"
+                }
+            }
+        ]
+      }'
+
+Outputs:
+
+  LambdaRoleArn:
+    Description: The role arn generated by the stack
+    Value: !GetAtt LambdaRole.Arn
+
+  LambdasApiGatewayId:
+    Description: The api gateway resource id.
+    Value: !GetAtt LambdasApiGateway.RootResourceId
+
+  LambdasApiUrl:
+    Description: URL of your API endpoint
+    Value: !Join
+      - ''
+      - - https://
+        - !Ref LambdasApiGateway
+        - '.execute-api.'
+        - !Ref 'AWS::Region'
+        - '.amazonaws.com/v1'

@@ -22,15 +22,16 @@ make && make install
 **You can build the entire AWS SDK if you delete `-DBUILD_ONLY="s3"` from the command.**
 
 > WARNING I had to do this before
->```
->cd aws-sdk-cpp
->git checkout main
->git pull origin main
->git submodule update --init --recursive
->```
-> * Ubuntu 20.04.3 LTS x86_64
-> * cmake version 3.16.3
 >
+> ```
+> cd aws-sdk-cpp
+> git checkout main
+> git pull origin main
+> git submodule update --init --recursive
+> ```
+>
+> - Ubuntu 20.04.3 LTS x86_64
+> - cmake version 3.16.3
 
 ### Build the Custom Runtime
 
@@ -46,7 +47,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release \
 make && make install
 ```
 
-## Deploy the lambda 
+## Deploy the lambda
 
 `./lambda-cpp/deploy.sh -l <lambda_name> -p <aws_profile>`
 
@@ -60,5 +61,4 @@ make && make install
 
 [https://github.com/awslabs/aws-lambda-cpp/tree/master/examples/s3](https://github.com/awslabs/aws-lambda-cpp/tree/master/examples/s3)
 
-[https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/cpp/example_code](https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/cpp/example_code)# aws-lambda-cpp
-# aws-lambda-cpp
+[https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/cpp/example_code](https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/cpp/example_code)
